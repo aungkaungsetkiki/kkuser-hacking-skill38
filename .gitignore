@@ -1,0 +1,22 @@
+# secrets and engagement data — never commit
+.env
+.env.*
+*.pem
+*.key
+*.p12
+token*
+*_token
+secrets/
+loot/
+evidence/
+engagements/
+*.sqlite
+*.db
+
+# tooling noise
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+.DS_Store
+*.log

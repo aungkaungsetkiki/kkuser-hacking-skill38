@@ -311,21 +311,24 @@ FALLBACK: Report failure with details
 
 **Scenario:** User asks to fetch https://target.com
 
-```powershell
-# Try Method 1: webfetch
-Try webfetch tool first (fastest)
+Escalate through these methods in order, stopping at the first that returns content:
 
-# If 429 or timeout:
-Try WSL curl with stealth headers:
+**1. `webfetch` tool first** — fastest, no shell needed.
+
+**2. On 429 or timeout, WSL curl with stealth headers:**
+
+```bash
 wsl -d kali-linux -- curl -s -L \
   -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" \
   -H "Accept: text/html,application/xhtml+xml" \
   -H "Accept-Language: en-US,en;q=0.9" \
   -H "Referer: https://google.com" \
   https://target.com
+```
 
-# If still fails:
-Try PowerShell with full headers:
+**3. If that still fails, PowerShell with the full header set:**
+
+```powershell
 $headers = @{
     'User-Agent' = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
     'Accept' = 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8'
@@ -335,10 +338,9 @@ $headers = @{
     'DNT' = '1'
 }
 Invoke-WebRequest -Uri "https://target.com" -Headers $headers -UseBasicParsing
-
-# If JavaScript required:
-Use playwright_browser_navigate → playwright_browser_snapshot
 ```
+
+**4. If JavaScript is required:** `playwright_browser_navigate` → `playwright_browser_snapshot`.
 
 ---
 

@@ -333,13 +333,15 @@ python3 tools/build_catalog.py            # SKILLS.md ပြန်ထုတ်
 |---|---|
 | `validate_skills.py` | 38 skills, **38 ok, 0 failing** |
 | `deep_audit.py` | **TOTAL PROBLEMS: 0** |
-| `code_block_audit.py` | 398 blocks, 221 validated, **0 failed** |
+| `code_block_audit.py` | 399 blocks, 240 validated, **0 failed** |
 | `fence_report.py` | **0 defects in 38 files** |
 | `selftest.py` | **7 checks, 0 failing** |
 
-`code_block_audit.py` က bash, node/esbuild, php, ruby, solcjs, PyYAML, json ကို စစ်တယ်။
-Checker မရှိတဲ့ tag တွေ (markdown, text, powershell, html, java, xml, sql စသဖြင့်) ကို
-"skipped" လို့ ရိုးသားစွာ ပြတယ် — မစစ်နိုင်တာကို စစ်ပြီးလို့ မပြောပါ။
+`code_block_audit.py` က bash, node/esbuild, php, ruby, solcjs, PyYAML, json, **PowerShell (pwsh parser)** နဲ့ **XML (ElementTree)** ကို စစ်တယ်။
+PowerShell block ၁၇ ခုကို စစ်ဖို့ `pwsh` လိုတယ် — မရှိရင် အဲဒါတွေကို "skipped" လို့ ရိုးသားစွာ ပြတယ် (validated 240 အစား 223 ပြမယ်)။
+Checker မရှိတဲ့ tag တွေ (markdown, text, html, java, sql) ကို "skipped" လို့
+ရိုးသားစွာ ပြတယ် — မစစ်နိုင်တာကို စစ်ပြီးလို့ မပြောပါ။
+`html` နဲ့ `java` အတွက် validator မထည့်ရသေးပါ (တကယ့် block ၃ ခုနဲ့ ၂ ခုသာ ရှိတယ်)။
 
 ---
 

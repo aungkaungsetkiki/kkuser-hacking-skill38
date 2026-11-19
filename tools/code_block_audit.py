@@ -9,6 +9,8 @@ toolchain for that language:
   jsonc          -> python json after // and /* */ comments are stripped
   yaml           -> PyYAML
   python         -> ast.parse
+  powershell     -> pwsh parser    (only when pwsh is installed)
+  xml            -> ElementTree well-formedness
   javascript/js  -> node --check
   typescript/ts  -> esbuild (syntax only, no type check)
   php            -> php -l
@@ -278,6 +280,56 @@ def check_ruby(code: str):
         os.unlink(name)
 
 
+PS_PARSE = r"""
+$errors = $null
+[System.Management.Automation.Language.Parser]::ParseFile($env:AUDIT_PS_FILE, [ref]$null, [ref]$errors) | Out-Null
+if ($errors.Count -gt 0) {
+  foreach ($e in $errors) { "line {0}: {1}" -f $e.Extent.StartLineNumber, $e.Message }
+  exit 1
+}
+exit 0
+"""
+
+
+def check_powershell(code: str):
+    """Parse with the real PowerShell parser when pwsh is on PATH.
+
+    Without pwsh the block stays unvalidated rather than being guessed at.
+    """
+    pwsh = shutil.which("pwsh")
+    if not pwsh:
+        raise Skipped("pwsh not installed")
+    with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False,
+                                     encoding="utf-8") as fh:
+        fh.write(code + "\n")
+        name = fh.name
+    try:
+        env = dict(os.environ, AUDIT_PS_FILE=name)
+        r = subprocess.run([pwsh, "-NoLogo", "-NoProfile", "-Command", PS_PARSE],
+                           capture_output=True, text=True, env=env)
+        if r.returncode != 0:
+            lines = (r.stdout or r.stderr).strip().split("\n")
+            return lines[0][:160] if lines else "powershell parse failed"
+        return None
+    finally:
+        os.unlink(name)
+
+
+def check_xml(code: str):
+    """Well-formedness only. An undefined entity is expected in XXE payloads."""
+    import xml.etree.ElementTree as ET
+    try:
+        ET.fromstring(code)
+        return None
+    except ET.ParseError as exc:
+        msg = str(exc)
+        # A DOCTYPE declaring its own entity is a deliberate XXE payload; the
+        # standard parser refuses to resolve it, which is not a syntax defect.
+        if "undefined entity" in msg.lower():
+            return None
+        return msg[:160]
+
+
 CHECKERS = {
     "json": check_json,
     "jsonc": check_jsonc,
@@ -291,6 +343,10 @@ CHECKERS = {
     "solidity": check_solidity,
     "sol": check_solidity,
     "tsx": lambda code: check_ts(code, tsx=True),
+    "powershell": check_powershell,
+    "pwsh": check_powershell,
+    "ps1": check_powershell,
+    "xml": check_xml,
 }
 
 

@@ -38,7 +38,7 @@ OSINT = ZERO packets to target. Everything must be from:
 ## PHASE 1: Domain & Infrastructure Mapping
 
 ### WHOIS History (multiple sources):
-```powershell
+```bash
 # Current WHOIS
 whois domain.com
 

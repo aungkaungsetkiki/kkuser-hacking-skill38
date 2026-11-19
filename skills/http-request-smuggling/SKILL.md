@@ -32,7 +32,7 @@ source: original
 
 A single request that produces **two responses** or a reproducible delay is the gate.
 
-```
+```http
 POST / HTTP/1.1
 Host: target
 Content-Length: 4

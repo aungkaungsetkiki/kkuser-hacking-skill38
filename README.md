@@ -189,6 +189,8 @@ Copy-Item "$HOME\kkuser-hacking-skill38\agents\*" "$HOME\.config\opencode\agents
 
 Skill folder ကို နေရာမရွှေ့ဘဲ config ကနေ ညွှန်လည်း ရတယ်:
 
+**V2** (array — path နဲ့ URL ရော):
+
 ```jsonc
 {
   "$schema": "https://opencode.ai/config.json",
@@ -198,8 +200,23 @@ Skill folder ကို နေရာမရွှေ့ဘဲ config ကနေ ည
 }
 ```
 
-ဒီနည်းက **OpenCode v2** မှာ ကောင်းကောင်း အလုပ်ဖြစ်တယ်။ v1 သုံးရင်တော့ အပေါ်က
-ကူးထည့်တဲ့ နည်းလမ်း (၃) ကို သုံးပါ — ပိုသေချာတယ်။
+**V1** (object — `paths` နဲ့ `urls` ကွဲ):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "skills": {
+    "paths": ["~/kkuser-hacking-skill38/skills"]
+  }
+}
+```
+
+v1 မှာ ဒီ field ကို သေချာ မထောက်ပံ့နိုင်ရင် အပေါ်က ကူးထည့်တဲ့
+နည်းလမ်း (၃) ကို သုံးပါ — နှစ်မျိုးလုံးမှာ အလုပ်ရတယ်။
+
+> ဒီ repo ရဲ့ `skills/<skill-id>/SKILL.md` ပုံစံက V2 ရဲ့ တရားဝင်
+grouping layout နဲ့ တူတယ်။ V2 က `.opencode/skill/` နဲ့ `.opencode/skills/`
+နှစ်ခုလုံးကို ရှာတယ်။ V1 က `skills/*/SKILL.md` တစ်ထပ်ပဲ ရှာတယ်။
 
 ---
 
@@ -245,7 +262,22 @@ Skill တစ်ခုကို ခေါ်လိုက်ရင် သူ့ရ
 | `vuln-validator` | subagent | "ဒါ တကယ်လား" — false positive ရှင်းခြင်း |
 | `report-writer` | subagent | Client-grade report ရေးခြင်း |
 
-Agent ပြောင်းရန်: `Tab` ခလုတ် (သို့) `/agents` command။
+**Agent တပ်ပြီလား စစ်ရန်:**
+
+```bash
+opencode agent list     # သင့် agent ID ၄ ခု ပေါ်ရမယ်
+```
+
+**အသုံးပြုနည်း:**
+
+- **OpenCode V1** — primary agent တွေကို **`Tab`** ခလုတ်နဲ့ လှည့်တယ်။
+  subagent တွေကို `@` နဲ့ ခေါ်တယ် — ဥပမာ `@vuln-validator ဒါ စစ်ပေး`။
+- **OpenCode V2** — `opencode.jsonc` မှာ `"default_agent": "red-team-lead"` လို့ သတ်မှတ်တယ်။
+  subagent ကို primary agent က ကိုယ်တိုင် ခေါ်တယ်: "use the vuln-validator subagent to …"။
+
+> Agent ဖိုင်တွေက **V1 frontmatter** (`permission:` map, `temperature:`) သုံးတယ်။
+> V2 က V1 frontmatter ကို အလိုအလျောက် ဘာသာပြန်တယ် — ဒါကြောင့် V1/V2 နှစ်မျိုးလုံး အလုပ်ဖြစ်တယ်။
+> `temperature` က V2 မှာ အာနိသင် မရှိဘူး (model variant မှာ သတ်မှတ်ရတယ်) — ဒါက error မဟုတ်ပါ။
 
 ### ၄.၄ လက်တွေ့ အလုပ်စဉ် ဥပမာ
 
@@ -258,7 +290,38 @@ Agent ပြောင်းရန်: `Tab` ခလုတ် (သို့) `/age
 6) @report-writer       → report ရေး
 ```
 
-### ၄.၅ ဘယ် skill က ဘယ်အလုပ်မှာ လဲ — လျင်မြန်စွာ ရှာခြင်း
+### ၄.၅ Skill မပေါ်ရင် စစ်ရန် (Troubleshooting)
+
+```bash
+# ၁။ ဖိုင် နာမည် SKILL.md (အကြီးစာလုံး အတိ) ဟုတ်လား
+ls ~/.config/opencode/skills/sql-injection/SKILL.md
+
+# ၂။ frontmatter မှာ name နဲ့ description ရှိလား
+head -5 ~/.config/opencode/skills/sql-injection/SKILL.md
+
+# ၃။ ID က folder နာမည်ကနေ ဆင်းသက်တယ် (frontmatter name မဟုတ်)
+ls ~/.config/opencode/skills
+```
+
+အများဆုံး တွေ့ရတဲ့ အကြောင်းရင်း ၄ ခု:
+
+1. **Folder နှစ်ထပ် ဖြစ်နေတယ်** — `skills/02-vuln-class/sql-injection/SKILL.md` ဆိုရင်
+   v1 မှာ မတွေ့ဘူး။ ဒီ repo က flat (`skills/sql-injection/SKILL.md`) ဖြစ်လို့
+   `cp -r skills/* ...` လုပ်ရင် မှန်တယ်။
+2. **`description` မရှိ** — description မပါတဲ့ skill ကို model ကို မကြော်ငြာဘူး။
+   ဒီ repo မှာ ၃၈ ခုလုံး ပါတယ်။
+3. **Permission က deny** — `opencode.json` ရဲ့ `permission.skill` မှာ စစ်ပါ။
+4. **ID ထပ်** — တခြား source မှာ အလားတူ ID ရှိရင် နောက်က တစ်ခုက လွှမ်းတယ်။
+
+Skill တစ်ခုကို model ကို မ​ကြော်ငြာစေချင်ဘဲ ကိုယ်တိုင် `@` နဲ့ပဲ ခေါ်ချင်ရင်
+frontmatter မှာ ဒါ ထည့်ပါ:
+
+```yaml
+metadata:
+  opencode/autoinvoke: false
+```
+
+### ၄.၆ ဘယ် skill က ဘယ်အလုပ်မှာ လဲ — လျင်မြန်စွာ ရှာခြင်း
 
 ```bash
 # နာမည်နဲ့ ရှာ
@@ -333,15 +396,23 @@ python3 tools/build_catalog.py            # SKILLS.md ပြန်ထုတ်
 |---|---|
 | `validate_skills.py` | 38 skills, **38 ok, 0 failing** |
 | `deep_audit.py` | **TOTAL PROBLEMS: 0** |
-| `code_block_audit.py` | 399 blocks, 240 validated, **0 failed** |
+| `code_block_audit.py` | 399 blocks, 250 validated, **0 failed** |
 | `fence_report.py` | **0 defects in 38 files** |
 | `selftest.py` | **7 checks, 0 failing** |
 
-`code_block_audit.py` က bash, node/esbuild, php, ruby, solcjs, PyYAML, json, **PowerShell (pwsh parser)** နဲ့ **XML (ElementTree)** ကို စစ်တယ်။
-PowerShell block ၁၇ ခုကို စစ်ဖို့ `pwsh` လိုတယ် — မရှိရင် အဲဒါတွေကို "skipped" လို့ ရိုးသားစွာ ပြတယ် (validated 240 အစား 223 ပြမယ်)။
-Checker မရှိတဲ့ tag တွေ (markdown, text, html, java, sql) ကို "skipped" လို့
-ရိုးသားစွာ ပြတယ် — မစစ်နိုင်တာကို စစ်ပြီးလို့ မပြောပါ။
-`html` နဲ့ `java` အတွက် validator မထည့်ရသေးပါ (တကယ့် block ၃ ခုနဲ့ ၂ ခုသာ ရှိတယ်)။
+`code_block_audit.py` က ဒီ language တွေကို တကယ့် toolchain နဲ့ စစ်တယ်:
+bash (`bash -n`), javascript (`node --check`), typescript (`esbuild`), json, jsonc,
+yaml (`PyYAML`), python (`ast`), php (`php -l`), ruby (`ruby -c`),
+solidity (`solcjs`), **powershell (`pwsh` parser)**, **xml (ElementTree)**,
+**html (tag nesting)**, **java (`javac` — syntax သာ)**, **sql (SQLite EXPLAIN)**,
+**http (request/status line + headers)**, **gitignore (git status)**။
+
+Toolchain တစ်ခု မရှိရင် အဲဒီ block တွေကို "skipped" လို့ ရိုးသားစွာ ပြတယ် —
+မစစ်နိုင်တာကို စစ်ပြီးလို့ မပြောပါ။ ဒီ repo မှာ ကျန်တဲ့ **149 block** က
+`(none) 75`, `markdown 50`, `text 24` — အားလုံး diagram/prose/output ဖြစ်လို့ code မဟုတ်ပါ။
+
+Checker တစ်ခုချင်းစီကို **ကျိုးနေတဲ့ input နဲ့ မှန်တဲ့ input** နှစ်မျိုးလုံး စမ်းပြီးမှ ယုံတယ် —
+ဒါမှ "failed 0" ဆိုတာ အဓိပ္ပာယ် ရှိတယ်။
 
 ---
 
@@ -365,6 +436,14 @@ Checker မရှိတဲ့ tag တွေ (markdown, text, html, java, sql) �
 fetch, filesystem, wsl-security-tools)။ လိုတာ ရွေးပြီး သင့်
 `~/.config/opencode/opencode.jsonc` ထဲက `mcp` block မှာ ပေါင်းထည့်ပါ။
 **မဖြစ်မနေ မလိုပါ** — skill တွေ အလုပ်လုပ်ဖို့ MCP မလိုဘူး။
+
+ဒီဖိုင်က **V1 ပုံစံ** (`mcp.<name>.enabled`) သုံးတယ်။ V2 က `mcp` ထဲမှာ V1/V2
+ရောနှောထားတာကို လက်ခံတယ် — ဒါကြောင့် ဒီအတိုင်း ထည့်လို့ ရတယ်။
+V2 native ပုံစံ လိုချင်ရင် `mcp.servers` အောက်မှာ ထည့်ပြီး `enabled` အစား
+`disabled` (ပြောင်းပြန်) သုံးပါ။
+
+⚠️ ဒီဖိုင်ထဲက `wsl-security-tools` က `~/.config/opencode/mcp-servers/wsl-security-tools/index.js`
+ကို ရှာတယ် — အဲဒီဖိုင် မရှိရင် အဲဒီ server ကို enable မလုပ်ပါနဲ့။
 
 ---
 

@@ -11,19 +11,25 @@ toolchain for that language:
   python         -> ast.parse
   powershell     -> pwsh parser    (only when pwsh is installed)
   xml            -> ElementTree well-formedness
+  html           -> tag nesting (HTMLParser)
+  java           -> javac          (syntax errors only, symbols ignored)
+  sql            -> SQLite EXPLAIN (dialect-agnostic errors ignored)
+  http           -> raw request/status line plus header syntax
+  gitignore      -> git status on a scratch repo
   javascript/js  -> node --check
   typescript/ts  -> esbuild (syntax only, no type check)
   php            -> php -l
   ruby           -> ruby -c
   solidity       -> solcjs --bin (only when solcjs is installed)
 
-Blocks whose language has no validator (text, markdown, html, powershell,
-java, sql, ...) are counted as skipped and listed by tag, so the unvalidated
-share of the library is always visible.
+Blocks whose language has no validator are counted as skipped and listed by
+tag, so the unvalidated share of the library is always visible. Checkers are
+only registered for languages the library actually uses, and each one is
+verified against broken and valid input before it is trusted.
 
-Solidity snippets are parsed after being wrapped in a contract/function, and
-blocks that import a project-local or Forge path are reported as skipped
-rather than failed.
+Solidity snippets are parsed after being wrapped in a contract/function. A
+block that imports a project-local or Forge path is re-parsed with the import
+statements removed, so an unavailable dependency does not hide a syntax error.
 
 Exit code 1 when a block fails to parse. A failure is real: the reader copies
 the block and it does not run.
@@ -33,6 +39,7 @@ from __future__ import annotations
 import ast
 import collections
 import json
+from html.parser import HTMLParser
 import os
 import re
 import shutil
@@ -257,6 +264,13 @@ def check_solidity(code: str):
         if "requires different compiler version" in full:
             raise Skipped("pragma outside solcjs 0.8")
         if "not found" in full and "Source" in full:
+            # An import target that exists only in the reader's project is not a
+            # syntax defect. Drop the import statements (each is a complete
+            # statement) and parse the rest, so the body is still checked.
+            stripped = re.sub(r"(?m)^\s*import\s+[^;]+;\s*$", "", src)
+            if stripped != src and stripped not in attempts:
+                attempts.append(stripped)
+                continue
             raise Skipped("external imports unresolved")
         last_err = first
         if any(k in full for k in SYNTAX_ERRORS):
@@ -330,6 +344,163 @@ def check_xml(code: str):
         return msg[:160]
 
 
+JAVA_SYNTAX = (
+    "';' expected", "')' expected", "'}' expected", "'{' expected",
+    "illegal start", "reached end of file while parsing",
+    "class, interface, enum, or record expected",
+    "not a statement", "unclosed string literal", "invalid method declaration",
+    "illegal character", "identifier expected", "<identifier> expected",
+)
+
+
+def check_java(code: str):
+    """Compile a fragment inside a class; only *syntax* errors fail.
+
+    Undeclared identifiers and missing imports are semantic, and the block is
+    read as an illustration rather than a buildable file.
+    """
+    javac = shutil.which("javac")
+    if not javac:
+        raise Skipped("javac not installed")
+    attempts = [code] if re.search(r"\b(class|interface|enum|record)\s+\w", code) else [
+        "public class Block {\n  void f() throws Exception {\n" + code + "\n  }\n}",
+    ]
+    last = None
+    for src in attempts:
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "Block.java"
+            f.write_text(src + "\n", encoding="utf-8")
+            r = subprocess.run([javac, "-proc:none", "-d", tmp, str(f)],
+                               capture_output=True, text=True)
+        if r.returncode == 0:
+            return None
+        out = (r.stderr or r.stdout)
+        errors = [l.strip() for l in out.split("\n") if ": error:" in l]
+        if not errors:
+            return None
+        syntax = [e for e in errors if any(k in e for k in JAVA_SYNTAX)]
+        if syntax:
+            last = syntax[0].split("error:", 1)[-1].strip()[:160]
+            continue
+        return None  # parsed; only symbol/type resolution failed
+    return last or "javac failed"
+
+
+class _HtmlBalance(HTMLParser):
+    VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input",
+            "link", "meta", "param", "source", "track", "wbr"}
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.stack = []
+        self.errors = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag not in self.VOID:
+            self.stack.append(tag)
+
+    def handle_endtag(self, tag):
+        if tag in self.VOID:
+            return
+        if not self.stack:
+            self.errors.append(f"stray </{tag}>")
+            return
+        if self.stack[-1] != tag:
+            self.errors.append(f"</{tag}> closes <{self.stack[-1]}>")
+            while self.stack and self.stack.pop() != tag:
+                pass
+        else:
+            self.stack.pop()
+
+
+def check_html(code: str):
+    """Structural check: tags must nest. Missing doctype/alt is not an error."""
+    parser = _HtmlBalance()
+    parser.feed(code)
+    parser.close()
+    if parser.errors:
+        return parser.errors[0][:160]
+    if parser.stack:
+        return f"unclosed <{parser.stack[-1]}>"
+    return None
+
+
+def check_sql(code: str):
+    """Parse with SQLite; unknown tables/columns/functions are semantic."""
+    import sqlite3
+    body = code.strip().rstrip(";")
+    if not body:
+        return None
+    con = sqlite3.connect(":memory:")
+    try:
+        con.execute("CREATE TABLE products (id INTEGER, name TEXT, user_input TEXT, "
+                    "user_in TEXT, price REAL, username TEXT, password TEXT)")
+        con.execute("EXPLAIN " + body)
+        return None
+    except sqlite3.Error as exc:
+        msg = str(exc)
+        if "syntax error" in msg or "incomplete input" in msg:
+            return msg[:160]
+        return None
+    finally:
+        con.close()
+
+
+HTTP_LINE = re.compile(r"^(GET|HEAD|POST|PUT|PATCH|DELETE|OPTIONS|TRACE|CONNECT) \S+ HTTP/\d(?:\.\d)?$")
+STATUS_LINE = re.compile(r"^HTTP/\d(?:\.\d)? \d{3}(?: .*)?$")
+HEADER = re.compile(r"^([!#$%&'*+.^_`|~0-9A-Za-z-]+):[ \t]*(.*)$")
+
+
+def check_http(code: str):
+    """Validate a raw request/response start line and its header section.
+
+    Everything after the first blank line is the body and is not parsed as
+    headers; a smuggling payload deliberately puts a second request there.
+    """
+    lines = code.split("\n")
+    idx = 0
+    first = lines[0].strip() if lines else ""
+    if HTTP_LINE.match(first) or STATUS_LINE.match(first):
+        idx = 1
+    seen_header = False
+    for line in lines[idx:]:
+        if not line.strip():
+            break  # end of the header section; the rest is a body
+        if line.startswith((" ", "\t")):
+            continue  # obsolete line folding / continuation
+        m = HEADER.match(line)
+        if not m:
+            return f"bad header line: {line[:60]}"
+        seen_header = True
+        value = m.group(2)
+        if m.group(1).lower() == "content-security-policy":
+            for seg in value.split(";"):
+                seg = seg.strip()
+                if not seg:
+                    continue
+                if not re.fullmatch(r"[a-z][a-z0-9-]*(?:[ \t]+.+)?", seg):
+                    return f"bad CSP directive: {seg[:50]}"
+    if idx == 0 and not seen_header:
+        return "not an HTTP message"
+    return None
+
+
+def check_gitignore(code: str):
+    """Git must accept the pattern file without erroring."""
+    git = shutil.which("git")
+    if not git:
+        raise Skipped("git not installed")
+    with tempfile.TemporaryDirectory() as tmp:
+        subprocess.run([git, "init", "-q", tmp], capture_output=True, text=True)
+        Path(tmp, ".gitignore").write_text(code + "\n", encoding="utf-8")
+        Path(tmp, "probe.txt").write_text("x", encoding="utf-8")
+        r = subprocess.run([git, "-C", tmp, "status", "--porcelain"],
+                           capture_output=True, text=True)
+    if r.returncode != 0:
+        return (r.stderr or r.stdout).strip().split("\n")[0][:160]
+    return None
+
+
 CHECKERS = {
     "json": check_json,
     "jsonc": check_jsonc,
@@ -347,6 +518,12 @@ CHECKERS = {
     "pwsh": check_powershell,
     "ps1": check_powershell,
     "xml": check_xml,
+    "html": check_html,
+    "htm": check_html,
+    "java": check_java,
+    "sql": check_sql,
+    "http": check_http,
+    "gitignore": check_gitignore,
 }
 
 
